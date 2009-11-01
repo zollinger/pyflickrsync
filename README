@@ -1,1 +1,22 @@
 
+
+pyflickrsync depends on the flickrapi library found here:
+http://stuvel.eu/projects/flickrapi
+
+
+Usage example:
+
+
+api_key = 'xxxx'
+api_secret = 'xx'
+library_path = '/my/photo/library/'
+
+from flickrsync import FlickrSync
+import sys
+
+if __name__ == '__main__':
+    try:
+        f = FlickrSync(api_key, api_secret, library_path)
+        f.start()
+    except KeyboardInterrupt:
+        sys.exit(0)
