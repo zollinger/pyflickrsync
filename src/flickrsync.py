@@ -2,8 +2,7 @@ import flickrapi
 import os,sys,fnmatch
 import hashlib
 
-api_key = '3d910dbe5302ff28415039a78520debf'
-api_secret = 'e0b09baf3bdd1945'
+
 
 class FlickrSync:
     img_pattern = "*.jpg"
@@ -102,12 +101,6 @@ class Photo:
         print self._hash
         return self._hash
     
-if __name__ == '__main__':
-            
-    try:
-        f = FlickrSync(api_key, api_secret, '../images/')
-        f.start()
-    except KeyboardInterrupt:
-        sys.exit(0)
+
 
     
