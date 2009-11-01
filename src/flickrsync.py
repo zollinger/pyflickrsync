@@ -1,5 +1,4 @@
 import flickrapi
-import pyexiv2
 import os,sys,fnmatch
 import hashlib
 
@@ -10,12 +9,9 @@ class FlickrSync:
     img_pattern = "*.jpg"
     flickr = False
     base_dir = False
-    current_transfer_file  = False
-    current_image_meta = False
     current_photo = False
-    image_list = False
-    iptc_keyword = "pyuploaded234"
-    CONFIG_PATH = '.flickrsync'
+    photo_queue = False
+    CONFIG_DIR = '.flickrsync'
     api_key = False
     api_secret = False
     
@@ -34,15 +30,15 @@ class FlickrSync:
         self.flickr.get_token_part_two((token, frob))
         
         self.setup_dir()
-        self.image_list =  self.get_images_generator()
+        self.photo_queue =  self.get_images_generator()
         self.process()
         
     def setup_dir(self):
         '''Setup configuration directory where we store which images 
         have been uploaded already.'''
         try:
-            if not os.path.exists(os.path.join(self.base_dir, self.CONFIG_PATH)):
-                os.mkdir(os.path.join(self.base_dir, self.CONFIG_PATH))
+            if not os.path.exists(os.path.join(self.base_dir, self.CONFIG_DIR)):
+                os.mkdir(os.path.join(self.base_dir, self.CONFIG_DIR))
         except:
             print "Could not create configuration directory"
             sys.exit(1)
@@ -52,46 +48,41 @@ class FlickrSync:
         supplied root directory.'''
         for path, dirs, files in os.walk(self.base_dir):
             for filename in fnmatch.filter(files, self.img_pattern):
-                yield os.path.join(path, filename)
+                yield Photo(os.path.join(path, filename))
     
     def process(self):
         try:
             
-            
-            
-            img = self.image_list.next()
-            self.current_image_meta = pyexiv2.Image(img)
-            self.current_image_meta.readMetadata()
-            if "Iptc.Application2.Keywords" in self.current_image_meta.iptcKeys():
-                keywords = list(self.current_image_meta["Iptc.Application2.Keywords"])
-                if self.iptc_keyword in keywords:
-                    self.process()
-                else:
-                    self.upload(img)
+            self.current_photo = self.photo_queue.next()
+            if self.photo_is_uploaded(self.current_photo):
+                print "Skipping ", self.current_photo.path
+                self.process()
             else:
-                self.upload(img)
+                self.upload_current()
         except StopIteration:
             pass
     
-    def image_is_uploaded(self, img):
+    def photo_is_uploaded(self, photo):
+        if os.path.exists(os.path.join(self.base_dir, self.CONFIG_DIR, photo.hash())):
+            return True
+        return False
         
+    def photo_set_uploaded(self, photo):
+        file_path = os.path.join(self.base_dir, self.CONFIG_DIR, photo.hash())
+        if not os.path.exists(file_path):
+            open(file_path, 'w').close() 
     
-    def upload(self, file):
-        image_tags = '"' + '" "'.join( file.replace(self.base_dir, '').split('/')[:-1] )+ '"'
-        print image_tags
-        self.current_transfer_file = file
-        self.current_image_meta['Iptc.Application2.Keywords'] = 'uploaded'
-        keywords = list(self.current_image_meta['Iptc.Application2.Keywords'])
-        keywords.append(self.iptc_keyword)
-        self.current_image_meta['Iptc.Application2.Keywords'] = keywords
-        self.current_image_meta.writeMetadata()
+    def upload_current(self):
+        image_tags = '"' + '" "'.join( self.current_photo.path.replace(self.base_dir, '').split('/')[:-1] )+ '"'
+        print "Start uploading ", self.current_photo.path
+        print "Tags: ", image_tags
         
-        self.flickr.upload(filename=file, callback=self.cb, tags=image_tags)
+        self.flickr.upload(filename=self.current_photo.path, callback=self.cb, tags=image_tags)
         
     def cb(self, progress, done):
         if done:
-            self.current_transfer_file = False
-            print "Done uploading"
+            self.photo_set_uploaded(self.current_photo)
+            print "Done uploading "
             self.process()
         else:
             print "At %s%%" % progress
@@ -100,21 +91,23 @@ class FlickrSync:
 class Photo:
     _hash = False
     path = False
-    def __init(self, path):
+    def __init__(self, path):
         self.path = path
     
     def hash(self):
         if not self._hash:
             m = hashlib.md5()
-            self._hash = m.update(open(self.path, 'rb').read()).hexdigest()
+            m.update(open(self.path, 'rb').read())
+            self._hash = m.hexdigest()
+        print self._hash
         return self._hash
     
+if __name__ == '__main__':
+            
+    try:
+        f = FlickrSync(api_key, api_secret, '../images/')
+        f.start()
+    except KeyboardInterrupt:
+        sys.exit(0)
 
-try:
-    f = FlickrSync(api_key, api_secret, '../images/')
-    f.start()
-except KeyboardInterrupt:
-    sys.exit(0)
-    
-    
     
