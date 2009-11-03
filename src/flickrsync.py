@@ -92,7 +92,9 @@ class FlickrSync:
                 return set['id']
         print 'Creating new set ', setname
         resp = self.flickr.photosets_create(title=setname, primary_photo_id=photo_id)
-        return resp.find('photoset').attrib['id']
+        new_set_id = resp.find('photoset').attrib['id']
+        self.photo_sets.append({'name': setname, 'id': new_set_id })
+        return new_set_id
         
         
     def photo_set_uploaded(self, photo):
