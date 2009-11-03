@@ -13,8 +13,12 @@ class FlickrSync:
     CONFIG_DIR = '.flickrsync'
     api_key = False
     api_secret = False
+    photo_is_family = 0
+    photo_is_friend = 0
+    photo_is_public = 0
+    photo_sets = []
     
-    def __init__(self, api_key, secret, img_dir):
+    def __init__(self, api_key, api_secret, img_dir):
         self.api_key = api_key
         self.api_secret = api_secret
         self.base_dir = img_dir
@@ -23,14 +27,26 @@ class FlickrSync:
         
     def start(self):
         
-        self.flickr = flickrapi.FlickrAPI(api_key, api_secret)
+        self.flickr = flickrapi.FlickrAPI(self.api_key, self.api_secret)
         (token, frob) = self.flickr.get_token_part_one(perms='write')
         if not token: raw_input("Press ENTER after you authorized this program")
         self.flickr.get_token_part_two((token, frob))
-        
+        print 'Setting up directory'
         self.setup_dir()
+        print 'Getting existing flickr sets'
+        self.get_existing_sets()
+        print 'Looking for files'
         self.photo_queue =  self.get_images_generator()
+        print 'Starting...'
         self.process()
+        
+    def get_existing_sets(self):
+        '''Gets existing sets from Flickr''' 
+        sets = self.flickr.photosets_getList()
+        for set in sets.find('photosets').findall('photoset'):
+            self.photo_sets.append({'name': set[0].text, 'id': set.attrib['id'] })
+           
+        print self.photo_sets
         
     def setup_dir(self):
         '''Setup configuration directory where we store which images 
@@ -65,18 +81,46 @@ class FlickrSync:
         if os.path.exists(os.path.join(self.base_dir, self.CONFIG_DIR, photo.hash())):
             return True
         return False
+    
+    def get_set_name(self, setname, photo_id):
+        '''Tries to find an existing set name or creates a new one and returns id'''
+        # 
+        #self.flickr.photosets_create(title='Test set 2', primary_photo_id='4069933472')
+        # res2.find('photoset').attrib['id'] get photoset id of created set
+        for set in self.photo_sets:
+            if set['name'] == setname:
+                return set['id']
+        print 'Creating new set ', setname
+        resp = self.flickr.photosets_create(title=setname, primary_photo_id=photo_id)
+        return resp.find('photoset').attrib['id']
+        
         
     def photo_set_uploaded(self, photo):
         file_path = os.path.join(self.base_dir, self.CONFIG_DIR, photo.hash())
         if not os.path.exists(file_path):
-            open(file_path, 'w').close() 
+            open(file_path, 'w').close()
     
     def upload_current(self):
-        image_tags = '"' + '" "'.join( self.current_photo.path.replace(self.base_dir, '').split('/')[:-1] )+ '"'
+        tags = self.current_photo.path.replace(self.base_dir, '').split('/')[:-1]
+        image_tags = '"' + '" "'.join( tags )+ '"'
         print "Start uploading ", self.current_photo.path
         print "Tags: ", image_tags
         
-        self.flickr.upload(filename=self.current_photo.path, callback=self.cb, tags=image_tags)
+        response =  self.flickr.upload(filename=self.current_photo.path, callback=None, \
+                            tags=image_tags, is_family=self.photo_is_family, \
+                            is_public=self.photo_is_public, is_friend=self.photo_is_friend, format='etree')
+        new_photo_id =  response.findall('photoid')[0].text
+        # Find set id and add photo
+        if len(tags) > 0:
+            set_id = self.get_set_name(tags[0], new_photo_id)
+            try:
+                print 'Adding photo to set', set_id
+                self.flickr.photosets_addPhoto(photoset_id=set_id, photo_id=new_photo_id)
+            except:
+                print 'Photo already in set'
+        
+        self.photo_set_uploaded(self.current_photo)
+        self.process()
         
     def cb(self, progress, done):
         if done:
@@ -98,7 +142,6 @@ class Photo:
             m = hashlib.md5()
             m.update(open(self.path, 'rb').read())
             self._hash = m.hexdigest()
-        print self._hash
         return self._hash
     
 
