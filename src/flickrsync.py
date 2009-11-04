@@ -1,7 +1,9 @@
+#! /usr/bin/env python
+
 import flickrapi
 import os,sys,fnmatch
 import hashlib
-
+import getopt
 
 
 class FlickrSync:
@@ -17,7 +19,7 @@ class FlickrSync:
     photo_is_friend = 0
     photo_is_public = 0
     photo_sets = []
-    
+    verbose = False
     def __init__(self, api_key, api_secret, img_dir):
         self.api_key = api_key
         self.api_secret = api_secret
@@ -126,11 +128,10 @@ class FlickrSync:
         
     def cb(self, progress, done):
         if done:
-            self.photo_set_uploaded(self.current_photo)
-            print "Done uploading "
-            self.process()
+            pass
         else:
-            print "At %s%%" % progress
+            if self.verbose:
+                print "At %s%%" % progress
             
 
 class Photo:
@@ -145,7 +146,55 @@ class Photo:
             m.update(open(self.path, 'rb').read())
             self._hash = m.hexdigest()
         return self._hash
-    
 
+
+def main():
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "ho:v", ["help", "api_key=", "secret=", "dir="])
+    except getopt.GetoptError, err:
+        # print help information and exit:
+        print str(err) # will print something like "option -a not recognized"
+        usage()
+        sys.exit(2)
+    api_key = False
+    secret = False
+    dir = False
+    verbose = False
+    for o, a in opts:
+        if o == "-v":
+            verbose = True
+        elif o in ("-h", "--help"):
+            usage()
+            sys.exit()
+        elif o in ("-a", "--api_key"):
+            api_key = a
+        elif o in ("-s", "--secret"):
+            secret = a
+        elif o in ("-d", "--dir"):
+            dir = a
+        else:
+            assert False, "unhandled option"
+        
+    if not api_key or not secret or not dir:
+        print "Invalid options"
+        usage()
+        sys.exit(2)
+    try:
+        f = FlickrSync(api_key, secret, dir)
+        f.verbose = verbose
+        f.start()
+    except KeyboardInterrupt:
+        sys.exit(0)
+
+
+def usage():
+    print "Usage: python flickrsync.py --api_key=XXXX --secret=XXXX --dir=/my/photo/library/ [-v]"
+    print "--api_key    API key from your flickr account"
+    print "--secret    Your apps secret key"
+    print "--dir    Base directory of your photo library"
+
+if __name__ == '__main__':
+    main()
+        
 
     
