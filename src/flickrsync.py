@@ -48,7 +48,6 @@ class FlickrSync:
         for set in sets.find('photosets').findall('photoset'):
             self.photo_sets.append({'name': set[0].text, 'id': set.attrib['id'] })
            
-        print self.photo_sets
         
     def setup_dir(self):
         '''Setup configuration directory where we store which images 
